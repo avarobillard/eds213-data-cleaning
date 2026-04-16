@@ -28,6 +28,7 @@ Based on the glimpse of the file, `Snow_cover` was successfully cleaned and conv
 To address this, we will explore what is causing these columns to be cast as character.
 
 ```{r}
+#| warning: FALSE
 # Check for anything non-numeric when trying to coerce
 snowsurvey %>%
   count(Water_cover) %>% 
@@ -39,6 +40,7 @@ The metadata states that in all data fields, a blank or "-" indicates absence of
 To double check that we can convert the . values to NA, we can view all of those rows. The other cover columns also contain dots, so they can be converted to NA.
 
 ```{r}
+# View rows
 snowsurvey %>%
   filter(Water_cover == ".") %>%
   View()
@@ -62,6 +64,7 @@ Now that we have transformed the column to the correct data type, we need to ens
 One row has a value of 353, and we can see that the Land_cover column has a large negative value likely to offset this, which we will eventually need to fix as well. We will set this row's value to NA as it is not within the percentage range stated in the metadata.
  
 ```{r}
+# Convert high values to NA
 snowsurvey_fixed <- snowsurvey_fixed %>% 
   mutate(Water_cover = ifelse(Water_cover > 100, NA, Water_cover))
 ```
@@ -72,6 +75,7 @@ snowsurvey_fixed <- snowsurvey_fixed %>%
 Next, let's check the same key issues in the Land_cover column.
 
 ```{r}
+#| warning: FALSE
 # Check for anything non-numeric when trying to coerce
 snowsurvey_fixed %>%
   count(Land_cover) %>% 
@@ -100,6 +104,7 @@ We have two strange values, -100 and -298. We will set these row's values to NA 
 We can also see that in these columns, changing these values to NA has caused the three cover types not to add to 100 for the Total_cover column, which we will address next.
 
 ```{r}
+# Convert low values to NA
 snowsurvey_fixed <- snowsurvey_fixed %>% 
   mutate(Land_cover = ifelse(Land_cover < 0, NA, Land_cover))
 ```
@@ -137,11 +142,15 @@ all_cover_fixed_AVAROBILLARD <- snowsurvey_fixed %>%
 unique(all_cover_fixed_AVAROBILLARD$Total_cover)
 ```
 
-
 ```{r}
 # Re-check data set types overall 
 glimpse(all_cover_fixed_AVAROBILLARD)
 ```
+```{r}
+# Re-check data set ranges overall 
+summary(all_cover_fixed_AVAROBILLARD)
+```
+
 `Snow_cover`, `Water_cover`, `Land_cover` and `Total_cover` are all numeric, and confirmed to be 0-100 and add to 100 for `Total_cover`.
 
 #### Save processed data
