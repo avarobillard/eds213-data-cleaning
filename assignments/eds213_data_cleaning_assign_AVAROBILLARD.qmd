@@ -1,0 +1,153 @@
+---
+title: "EDS 213 Week 2 Assignment: Data Cleaning"
+format: html
+author: "Ava Robillard"
+date: 4/14/26
+---
+
+### Arctic Shorebird Demographics Network (ASDN) `Snow_survey` data cleaning
+
+```{r}
+#| message: FALSE
+# Load libraries
+library(tidyverse)
+
+# Import data
+# Snow_cover column pre-cleaned 
+snowsurvey <- read_csv(here::here("data", "processed", "snow_cover.csv"))
+```
+
+#### Water_cover column
+
+```{r}
+# View data types to infer any issues
+glimpse(snowsurvey)
+```
+Based on the glimpse of the file, `Snow_cover` was successfully cleaned and converted to numeric. `Water_cover`, `Land_cover`, and `Total_cover` are still of type character, which is problematic for functioning as percentages as described in the metadata.
+
+To address this, we will explore what is causing these columns to be cast as character.
+
+```{r}
+# Check for anything non-numeric when trying to coerce
+snowsurvey %>%
+  count(Water_cover) %>% 
+  filter(is.na(as.numeric(Water_cover)))
+```
+
+The metadata states that in all data fields, a blank or "-" indicates absence of data. Therefore, we can assume that the characters -, ., n/a, and unk all likely refer to unknown values, so can be converted to NA.
+ 
+To double check that we can convert the . values to NA, we can view all of those rows. The other cover columns also contain dots, so they can be converted to NA.
+
+```{r}
+snowsurvey %>%
+  filter(Water_cover == ".") %>%
+  View()
+```
+
+```{r}
+# Fix values by converting to NA
+snowsurvey_fixed <- snowsurvey %>% 
+  mutate(Water_cover = ifelse(Water_cover %in% c("-", ".", "n/a", "unk"), NA, Water_cover)) %>% 
+  # Convert Water_cover column to numeric
+  mutate(Water_cover = as.numeric(Water_cover))
+```
+
+Now that we have transformed the column to the correct data type, we need to ensure that the expectations for a percentage are followed (0-100)
+
+```{r}
+# Check for rows where Water_cover is out of expected bounds
+ snowsurvey_fixed %>% 
+  filter((Water_cover > 100) | (Water_cover < 0)) 
+```
+One row has a value of 353, and we can see that the Land_cover column has a large negative value likely to offset this, which we will eventually need to fix as well. We will set this row's value to NA as it is not within the percentage range stated in the metadata.
+ 
+```{r}
+snowsurvey_fixed <- snowsurvey_fixed %>% 
+  mutate(Water_cover = ifelse(Water_cover > 100, NA, Water_cover))
+```
+
+
+#### Land_cover column
+
+Next, let's check the same key issues in the Land_cover column.
+
+```{r}
+# Check for anything non-numeric when trying to coerce
+snowsurvey_fixed %>%
+  count(Land_cover) %>% 
+  filter(is.na(as.numeric(Land_cover)))
+```
+
+We have a very similar distribution of the same character strings preventing this column from being numeric, so we can similary convert them to NAs.
+
+```{r}
+# Fix values by converting to NA
+snowsurvey_fixed <- snowsurvey_fixed %>% 
+  mutate(Land_cover = ifelse(Land_cover %in% c("-", ".", "n/a", "unk"), NA, Land_cover)) %>% 
+  # Convert Land_cover column to numeric
+  mutate(Land_cover = as.numeric(Land_cover))
+```
+
+Now that we have transformed the column to the correct data type, we again need to ensure that the expectations for a percentage are followed (0-100)
+
+```{r}
+# Check for rows where Land_cover is out of expected bounds
+ snowsurvey_fixed %>% 
+  filter((Land_cover > 100) | (Land_cover < 0)) 
+```
+We have two strange values, -100 and -298. We will set these row's values to NA as they are not within the percentage range stated in the metadata.
+
+We can also see that in these columns, changing these values to NA has caused the three cover types not to add to 100 for the Total_cover column, which we will address next.
+
+```{r}
+snowsurvey_fixed <- snowsurvey_fixed %>% 
+  mutate(Land_cover = ifelse(Land_cover < 0, NA, Land_cover))
+```
+
+#### Total_cover column
+
+The metadata for this data states that this column serves to check the above percents (snow, water, and land) and should always sum to 100. We will use this to find rows with problematic values and correct them so that the column only returns 100 percents. 
+
+Now that the columns are all numeric, we can add them.
+
+```{r}
+# Re-compute Total_cover column after cleaning other rows 
+snowsurvey_fixed <- snowsurvey_fixed %>% 
+  mutate(Total_cover = Snow_cover + Water_cover + Land_cover)
+```
+
+```{r}
+# check that existing Total_cover column only contains 100s
+ snowsurvey_fixed %>% 
+  filter(Total_cover != 100)
+```
+
+We can see that there are 4,573 rows of data where the recomputed Total_cover column did not add up to 100, so we need to carefully decide how to handle them. 
+
+Consulting the metadata, the Total_cover column states that the total sum should always sum to 100, so we can assume that there is something problematic with these data rows and how the data was collected (not everything is accounted for in snow cover, water cover, and land cover, or there is extra cover above 100 percent which means there was some error in calculating the cover of each). Because we have a total of 42,830 rows in the raw data set, removing these rows would only remove about 10% of the data, which seems reasonable to preserve the integrity of the columns that the metadata expects. 
+
+```{r}
+# Filter to only columns that have 100 in the recomputed total
+all_cover_fixed_AVAROBILLARD <- snowsurvey_fixed %>%
+  filter(Total_cover == 100) 
+```
+
+```{r}
+# Check unique values in Total_cover 
+unique(all_cover_fixed_AVAROBILLARD$Total_cover)
+```
+
+
+```{r}
+# Re-check data set types overall 
+glimpse(all_cover_fixed_AVAROBILLARD)
+```
+`Snow_cover`, `Water_cover`, `Land_cover` and `Total_cover` are all numeric, and confirmed to be 0-100 and add to 100 for `Total_cover`.
+
+#### Save processed data
+
+```{r}
+# write file
+write_csv(all_cover_fixed_AVAROBILLARD, here::here("data", "processed", "all_cover_fixed_AVAROBILLARD.csv"))
+```
+
